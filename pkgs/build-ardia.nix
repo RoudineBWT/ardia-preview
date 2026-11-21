@@ -145,16 +145,19 @@ stdenv.mkDerivation {
 
     mkdir -p $out
 
-    # The .deb ships /usr/bin/ardia (launcher), /usr/lib/ardia (app) and
-    # /usr/share (desktop entry, icons)
-    if [ -d usr ]; then cp -r usr/. $out/; fi
-    if [ -d opt ]; then cp -r opt $out/opt; fi
+    # This .deb unpacks under ./root/ (root/usr/...), others unpack directly
+    base=.
+    if [ -d root/usr ] || [ -d root/opt ]; then base=root; fi
+
+    # /usr/bin/ardia (launcher), /usr/lib/ardia (app), /usr/share (desktop entry, icons, polkit)
+    if [ -d $base/usr ]; then cp -r $base/usr/. $out/; fi
+    if [ -d $base/opt ]; then cp -r $base/opt $out/opt; fi
 
     # The Nix store cannot hold setuid files; Chromium falls back to user namespaces
     find $out -perm -4000 -exec chmod u-s {} +
 
     # Point absolute paths in launchers/desktop files at the store
-    grep -rIl -e '/usr/lib/ardia' -e '/usr/bin/ardia' -e '/opt/ardia' $out/bin $out/share $out/lib 2>/dev/null \
+    { grep -rIl -e '/usr/lib/ardia' -e '/usr/bin/ardia' -e '/opt/ardia' $out || true; } \
       | xargs -r sed -i \
           -e "s|/usr/lib/ardia|$out/lib/ardia|g" \
           -e "s|/usr/bin/ardia|$out/bin/ardia|g" \
@@ -166,8 +169,12 @@ stdenv.mkDerivation {
       grep -q '^StartupWMClass=' "$desktop" || echo "StartupWMClass=ardia" >> "$desktop"
     done
 
-    # Fail early (and loudly) if the layout changed upstream
-    test -e $out/bin/ardia || { echo "Error: bin/ardia not found, .deb layout changed"; find $out -maxdepth 3; exit 1; }
+    # Fail early, and show the layout, if it is not what we expect
+    if [ ! -e $out/bin/ardia ]; then
+      echo "Error: bin/ardia not found, .deb layout differs. Unpacked tree:"
+      find . -maxdepth 5 -not -path './nix-support*' | head -80
+      exit 1
+    fi
 
     runHook postInstall
   '';
