@@ -1,0 +1,67 @@
+name: Check Ardia New Release
+
+on:
+  schedule:
+    - cron: "0 * * * *" # every hour
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for new releases
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASES=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "https://api.github.com/repos/ardia-browser/ardia/releases?per_page=100")
+
+          check_channel() {
+            local PRERELEASE=$1
+            local CACHE_FILE=$2
+
+            LATEST=$(echo "$RELEASES" | jq -r --argjson pre "$PRERELEASE" '
+              map(select(
+                .draft == false and .prerelease == $pre and
+                (.assets | any(.name | test("^Ardia-.*-linux-x64\\.deb$")))
+              ))
+              | sort_by(.published_at)
+              | reverse
+              | .[0].tag_name // empty
+            ')
+
+            CACHED=$(cat "$CACHE_FILE" 2>/dev/null || echo "none")
+            if [ -n "$LATEST" ] && [ "$LATEST" != "$CACHED" ]; then
+              echo "$LATEST" > "$CACHE_FILE"
+              echo "true"
+            else
+              echo "false"
+            fi
+          }
+
+          CHANGED=false
+          [ "$(check_channel false .last-ardia-stable)"  = "true" ] && CHANGED=true
+          [ "$(check_channel true  .last-ardia-nightly)" = "true" ] && CHANGED=true
+
+          echo "changed=$CHANGED" >> $GITHUB_OUTPUT
+
+      - name: Commit cache files
+        if: steps.check.outputs.changed == 'true'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update ardia release trackers"
+          file_pattern: .last-ardia-*
+          branch: main
+
+      - name: Trigger update workflow
+        if: steps.check.outputs.changed == 'true'
+        run: gh workflow run update.yml
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
