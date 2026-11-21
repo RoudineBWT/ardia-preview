@@ -28,9 +28,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Skip while versions are still placeholders
+        id: guard
+        run: |
+          if grep -q 'version = "0.0.0"' pkgs/${{ matrix.browser }}.nix; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          fi
+
       - uses: cachix/install-nix-action@v27
+        if: steps.guard.outputs.skip != 'true'
         with:
           nix_path: nixpkgs=channel:nixos-unstable
 
       - name: Build ${{ matrix.browser }}
+        if: steps.guard.outputs.skip != 'true'
         run: nix build .#${{ matrix.browser }} --print-build-logs --accept-flake-config
