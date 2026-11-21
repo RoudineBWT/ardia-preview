@@ -27,8 +27,13 @@ jobs:
 
       - name: Verify build
         run: |
-          nix build .#ardia --accept-flake-config --print-build-logs
-          nix build .#ardia-nightly --accept-flake-config --print-build-logs
+          for pkg in ardia ardia-nightly; do
+            if grep -q 'version = "0.0.0"' pkgs/$pkg.nix; then
+              echo "Skipping $pkg: no Linux release yet"
+              continue
+            fi
+            nix build .#$pkg --accept-flake-config --print-build-logs
+          done
 
       - name: Commit and Push changes
         uses: stefanzweifel/git-auto-commit-action@v5

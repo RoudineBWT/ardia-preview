@@ -14,7 +14,7 @@ fi
 # some releases only contain macOS assets.
 latest_tag() {
   local PRERELEASE=$1
-  curl -s "${AUTH[@]}" "https://api.github.com/repos/$REPO/releases?per_page=100" | \
+  curl -sL "${AUTH[@]}" "https://api.github.com/repos/$REPO/releases?per_page=100" | \
     jq -r --argjson pre "$PRERELEASE" '
       map(select(
         .draft == false and .prerelease == $pre and
@@ -23,7 +23,7 @@ latest_tag() {
       | sort_by(.published_at)
       | reverse
       | .[0].tag_name // empty
-    '
+    ' 2>/dev/null || true
 }
 
 update_package() {
@@ -37,8 +37,9 @@ update_package() {
   VERSION=$(latest_tag "$PRERELEASE" | sed 's/^v//')
 
   if [ -z "$VERSION" ]; then
-    echo "Error: Could not find a Linux release for $LABEL"
-    return 1
+    echo "Warning: no Linux release (.deb) found for $LABEL yet, skipping."
+    echo "--------------------------------------------------"
+    return 0
   fi
   echo "Latest $LABEL version: $VERSION"
 
