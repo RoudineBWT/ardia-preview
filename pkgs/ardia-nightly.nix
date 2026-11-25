@@ -1,8 +1,8 @@
 { callPackage }:
 let
   # Filled in by update.sh (CI runs it every few hours)
-  version = "0.2.47-nightly.9";
-  hash = "1avfhgi5ks6cn7qsl0370f3z26ml1b9krammxk8pkq29dxp8dfmj";
+  version = "0.2.49-nightly.1";
+  hash = "1nvvm1dzsvp692glgs18mfz2qdn4gsrq0lmdiq4sbmvymi7xb5sq";
 in
 callPackage ./build-ardia.nix { } {
   pname = "ardia-nightly";
